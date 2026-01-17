@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Distributed Shopping List System
 
 Peer-to-peer shopping list application for households.
@@ -15,3 +16,6 @@ Peer-to-peer shopping list application for households.
 - Dejan Vujaklija
 - Arthur Bekker
 - Markus Schwarzkopf
+=======
+# Distributed-Systems
+>>>>>>> 9146fa7940c193ff3279b75c14fb4a47fd16e8cf
