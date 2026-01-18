@@ -6,6 +6,9 @@ class Ring:
         self.discovery = discovery
         self.left_neighbor = None
         self.right_neighbor = None
+        
+        # Registriere Callback für Peer-Verlust
+        self.discovery.on_peer_removed = self.update_ring
     
     def update_ring(self):
         # Aktualisiert Ring basierend auf Peers
@@ -14,6 +17,7 @@ class Ring:
         if not peers:
             self.left_neighbor = None
             self.right_neighbor = None
+            print(f"[RING] Kein Ring - Node alleine")
             return
         
         # Sortiere alle IDs (inkl. eigener)
@@ -28,6 +32,7 @@ class Ring:
         if left_id == self.node.id:
             self.left_neighbor = None
             self.right_neighbor = None
+            print(f"[RING] Nur ein Node")
             return
         
         # Setze Nachbarn
