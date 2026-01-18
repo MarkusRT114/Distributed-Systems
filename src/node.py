@@ -52,17 +52,14 @@ class Node:
             return
         
         peers = self.election.ring.discovery.get_peers()
+        peer_info = peers.get(self.current_leader_id)
         
-        if self.current_leader_id == self.id:
-            leader_port = self.port
-            leader_ip = "127.0.0.1"
-        else:
-            peer_info = peers.get(self.current_leader_id)
-            if not peer_info:
-                print(f"[COORD] Leader nicht gefunden!")
-                return
-            leader_port = peer_info["port"]
-            leader_ip = peer_info.get("ip", "127.0.0.1")
+        if not peer_info:
+            print(f"[COORD] Leader nicht gefunden!")
+            return
+        
+        leader_port = peer_info["port"]
+        leader_ip = peer_info.get("ip", "127.0.0.1")
         
         msg = json.dumps({"type": "req", "action": action, "item": item})
         try:
