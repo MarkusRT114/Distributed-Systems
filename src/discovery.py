@@ -7,9 +7,6 @@ class Discovery:
     # UDP Discovery - Nodes finden sich im Netzwerk
     
     def __init__(self, node, listen_port=None):
-        # node: Das Node-Objekt
-        # listen_port: Optional - wenn None, finde automatisch einen freien Port
-        
         self.node_id = node.id
         self.broadcast_port = 5000
         self.broadcast_ip = "255.255.255.255"
@@ -26,6 +23,9 @@ class Discovery:
         # Liste der gefundenen Nodes
         self.peers = {}
         
+        # Callback für Ring-Update bei Peer-Verlust
+        self.on_peer_removed = None
+        
         # Socket für Broadcast senden
         self.broadcast_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.broadcast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -39,36 +39,49 @@ class Discovery:
         self.broadcast_recv_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.broadcast_recv_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
-        # Auf Mac: SO_REUSEPORT damit mehrere Processes den gleichen Port nutzen können
+        # Auf Mac: SO_REUSEPORT
         try:
             self.broadcast_recv_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
         except AttributeError:
-            pass  # Windows hat kein SO_REUSEPORT
+            pass
         
         self.broadcast_recv_socket.bind(("", self.broadcast_port))
-        
         self.running = False
         
-        print(f"[DISCOVERY] Node {self.node_id[:8]} hört auf Port {self.listen_port}")
+        print(f"[DISCOVERY] Node {self.node_id[:8]} auf Port {self.listen_port}")
     
     def _find_free_port(self, start_port=5001, max_attempts=100):
         # Findet automatisch einen freien Port
-        
         for port in range(start_port, start_port + max_attempts):
             try:
                 test_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
                 test_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 test_socket.bind(('', port))
                 test_socket.close()
-                
-                # Kurze Pause damit Port wirklich frei wird
                 time.sleep(0.1)
-                
                 return port
             except OSError:
                 continue
-        
         raise Exception("Kein freier Port gefunden!")
+    
+    def cleanup_peers(self):
+        # Entfernt inaktive Peers (Fault Detection)
+        current_time = time.time()
+        inactive_peers = []
+        
+        for peer_id, peer_info in self.peers.items():
+            if current_time - peer_info["timestamp"] > 10:
+                inactive_peers.append(peer_id)
+        
+        for peer_id in inactive_peers:
+            print(f"[DISCOVERY] Peer {peer_id[:8]} timeout - entfernt")
+            del self.peers[peer_id]
+        
+        # Trigger Ring-Update wenn Peers entfernt wurden
+        if inactive_peers and self.on_peer_removed:
+            self.on_peer_removed()
+        
+        return len(inactive_peers) > 0
     
     def send_announcement(self):
         # Sendet Announcement mit eigener Port-Info
@@ -83,15 +96,15 @@ class Discovery:
         # Sende an Broadcast Port
         self.broadcast_socket.sendto(data, (self.broadcast_ip, self.broadcast_port))
         
-        # Sende auch direkt an bekannte Peers
-        for peer_id, peer_info in self.peers.items():
+        # Sende auch direkt an bekannte Peers - benutze list()
+        for peer_id, peer_info in list(self.peers.items()):
             try:
                 self.broadcast_socket.sendto(data, ("127.0.0.1", peer_info["port"]))
             except:
                 pass
     
     def listen_for_announcements(self):
-        # Hört auf Broadcast Port (5000)
+        # Hört auf Broadcast Port
         while self.running:
             try:
                 data, addr = self.broadcast_recv_socket.recvfrom(1024)
@@ -115,7 +128,7 @@ class Discovery:
                 
             except Exception as e:
                 if self.running:
-                    print(f"[DISCOVERY] Fehler beim Empfangen: {e}")
+                    print(f"[DISCOVERY] Fehler: {e}")
     
     def start(self):
         # Startet Discovery Service
@@ -126,17 +139,18 @@ class Discovery:
         listen_thread.daemon = True
         listen_thread.start()
         
-        # Thread für regelmäßiges Senden
+        # Thread für regelmäßiges Senden + Cleanup
         def announce_loop():
             while self.running:
                 self.send_announcement()
-                time.sleep(2)  # Alle 2 Sekunden
+                self.cleanup_peers()
+                time.sleep(2)
         
         announce_thread = threading.Thread(target=announce_loop)
         announce_thread.daemon = True
         announce_thread.start()
         
-        print(f"[DISCOVERY] Service gestartet für Node {self.node_id[:8]}")
+        print(f"[DISCOVERY] Service gestartet")
     
     def stop(self):
         # Stoppt Discovery Service
@@ -147,7 +161,7 @@ class Discovery:
             self.broadcast_recv_socket.close()
         except:
             pass
-        print(f"[DISCOVERY] Service gestoppt für Node {self.node_id[:8]}")
+        print(f"[DISCOVERY] Service gestoppt")
     
     def get_peers(self):
         # Gibt Dictionary aller Peers zurück
