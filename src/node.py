@@ -12,6 +12,8 @@ class Node:
         self.port = None
         self.shopping_list = ShoppingList()
         self.is_leader = False
+        self.current_leader_id = None
+        self.sequence_number = 0
         self.election = None
         self.coord_socket = None
         self.coord_running = False
@@ -19,7 +21,6 @@ class Node:
         print(f"[NODE] Erstellt: {self.id[:8]}")
     
     def set_coordinator(self, election):
-        # Initialisiert Coordinator
         self.election = election
         
         self.coord_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -38,9 +39,7 @@ class Node:
             self.coord_socket.close()
     
     def send_to_leader(self, action, item):
-        # Sendet Request an Leader
         if self.is_leader:
-            # Ich bin Leader - direkt ausführen
             if action == "add":
                 self.shopping_list.add_item(item)
             elif action == "remove":
@@ -48,21 +47,37 @@ class Node:
             self._broadcast_update(action, item)
             return
         
-        # Finde Leader (höchste ID)
-        peers = self.election.ring.discovery.get_peers()
-        leader_id = max([self.id] + list(peers.keys()))
-        leader_port = peers[leader_id]["port"] if leader_id != self.id else self.port
+        if not self.current_leader_id:
+            print(f"[COORD] Kein Leader bekannt!")
+            return
         
-        # Sende Request
+        peers = self.election.ring.discovery.get_peers()
+        
+        if self.current_leader_id == self.id:
+            leader_port = self.port
+        else:
+            peer_info = peers.get(self.current_leader_id)
+            if not peer_info:
+                print(f"[COORD] Leader nicht gefunden!")
+                return
+            leader_port = peer_info["port"]
+        
         msg = json.dumps({"type": "req", "action": action, "item": item})
         try:
             self.coord_socket.sendto(msg.encode(), ("127.0.0.1", leader_port + 2000))
-        except:
-            pass
+        except Exception as e:
+            print(f"[COORD] Fehler: {e}")
     
     def _broadcast_update(self, action, item):
-        # Leader broadcasted Update
-        msg = json.dumps({"type": "upd", "action": action, "item": item})
+        self.sequence_number += 1
+        
+        msg = json.dumps({
+            "type": "upd",
+            "action": action,
+            "item": item,
+            "seq": self.sequence_number
+        })
+        
         peers = self.election.ring.discovery.get_peers()
         
         for peer_id, peer_info in peers.items():
@@ -72,14 +87,12 @@ class Node:
                 pass
     
     def _coord_listen(self):
-        # Hört auf Coordinator-Nachrichten
         while self.coord_running:
             try:
                 data, _ = self.coord_socket.recvfrom(1024)
                 msg = json.loads(data.decode())
                 
                 if msg["type"] == "req" and self.is_leader:
-                    # Request empfangen
                     action, item = msg["action"], msg["item"]
                     
                     if action == "add":
@@ -90,8 +103,10 @@ class Node:
                     self._broadcast_update(action, item)
                 
                 elif msg["type"] == "upd":
-                    # Update empfangen
                     action, item = msg["action"], msg["item"]
+                    seq = msg.get("seq", 0)
+                    
+                    print(f"[COORD] Update #{seq}: {action} {item}")
                     
                     if action == "add" and item not in self.shopping_list.items:
                         self.shopping_list.items.append(item)
