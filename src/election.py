@@ -9,7 +9,6 @@ class Election:
         self.node = node
         self.ring = ring
         
-        # TCP Socket für Election (zuverlässig)
         self.election_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.election_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         
@@ -19,6 +18,9 @@ class Election:
         
         self.running = False
         self.election_in_progress = False
+        
+        # Registriere Election im Ring für Re-Election
+        self.ring.set_election(self)
         
         print(f"[ELECTION] TCP auf Port {self.election_port}")
     
@@ -54,7 +56,8 @@ class Election:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2)
-            sock.connect(("127.0.0.1", neighbor["port"] + 1000))
+            target_ip = neighbor.get("ip", "127.0.0.1")
+            sock.connect((target_ip, neighbor["port"] + 1000))
             sock.sendall(msg.encode())
             sock.close()
         except Exception as e:
@@ -70,7 +73,8 @@ class Election:
         try:
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             sock.settimeout(2)
-            sock.connect(("127.0.0.1", neighbor["port"] + 1000))
+            target_ip = neighbor.get("ip", "127.0.0.1")
+            sock.connect((target_ip, neighbor["port"] + 1000))
             sock.sendall(msg.encode())
             sock.close()
         except:
@@ -116,13 +120,13 @@ class Election:
                         self.node.is_leader = False
                         self.election_in_progress = False
                         
-                        # Weiterleiten
                         neighbor = self.ring.get_right_neighbor()
                         if neighbor:
                             try:
                                 sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                                 sock.settimeout(2)
-                                sock.connect(("127.0.0.1", neighbor["port"] + 1000))
+                                target_ip = neighbor.get("ip", "127.0.0.1")
+                                sock.connect((target_ip, neighbor["port"] + 1000))
                                 sock.sendall(data)
                                 sock.close()
                             except:

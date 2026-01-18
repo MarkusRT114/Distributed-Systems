@@ -55,16 +55,18 @@ class Node:
         
         if self.current_leader_id == self.id:
             leader_port = self.port
+            leader_ip = "127.0.0.1"
         else:
             peer_info = peers.get(self.current_leader_id)
             if not peer_info:
                 print(f"[COORD] Leader nicht gefunden!")
                 return
             leader_port = peer_info["port"]
+            leader_ip = peer_info.get("ip", "127.0.0.1")
         
         msg = json.dumps({"type": "req", "action": action, "item": item})
         try:
-            self.coord_socket.sendto(msg.encode(), ("127.0.0.1", leader_port + 2000))
+            self.coord_socket.sendto(msg.encode(), (leader_ip, leader_port + 2000))
         except Exception as e:
             print(f"[COORD] Fehler: {e}")
     
@@ -82,7 +84,8 @@ class Node:
         
         for peer_id, peer_info in peers.items():
             try:
-                self.coord_socket.sendto(msg.encode(), ("127.0.0.1", peer_info["port"] + 2000))
+                peer_ip = peer_info.get("ip", "127.0.0.1")
+                self.coord_socket.sendto(msg.encode(), (peer_ip, peer_info["port"] + 2000))
             except:
                 pass
     
