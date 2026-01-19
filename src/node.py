@@ -107,7 +107,6 @@ class Node:
                     seq = msg.get("seq", 0)
                     
                     if action == "sync":
-                        # Sync-Message ohne Log
                         if item not in self.shopping_list.items:
                             self.shopping_list.items.append(item)
                     else:

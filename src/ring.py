@@ -45,7 +45,6 @@ class Ring:
         print(f"[RING] Neuer Peer joint - Ring-Update + State-Sync")
         self.update_ring()
         
-        # Leader sendet State nur bei NEUEN Peers
         if self.node.is_leader and hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
             items = self.node.shopping_list.get_items()
             if items:
@@ -53,7 +52,7 @@ class Ring:
                 import time
                 
                 def delayed_sync():
-                    time.sleep(2)
+                    time.sleep(5)
                     print(f"[RING] Leader sendet State-Sync ({len(items)} Items)")
                     for item in items:
                         try:
