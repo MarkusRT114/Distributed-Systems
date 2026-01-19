@@ -11,26 +11,33 @@ class Ring:
         self.discovery.on_peer_removed = self.handle_peer_removal
     
     def set_election(self, election):
-        # Wird nach Election-Initialisierung aufgerufen
         self.election = election
     
     def handle_peer_removal(self, removed_peers):
-        # Wird aufgerufen wenn Peers entfernt wurden
         print(f"[RING] Peer-Verlust erkannt - Ring-Update")
         self.update_ring()
         
-        # Prüfe ob Leader ausgefallen ist
         if self.node.current_leader_id in removed_peers:
             print(f"[RING] Leader ausgefallen - starte Re-Election")
             self.node.is_leader = False
             self.node.current_leader_id = None
             
-            # Starte neue Election nach kurzer Verzögerung
             if self.election:
                 import threading
                 def delayed_election():
                     import time
-                    time.sleep(1)
+                    time.sleep(2)
+                    
+                    # Prüfe ob wir alleine sind
+                    peers = self.discovery.get_peers()
+                    if not peers:
+                        # Nur noch wir - werden automatisch Leader
+                        self.node.is_leader = True
+                        self.node.current_leader_id = self.node.id
+                        print(f"[ELECTION] Node {self.node.id[:8]} ist alleine - wird Leader")
+                        return
+                    
+                    # Starte Election
                     if not self.election.election_in_progress:
                         self.election.start_election()
                 
