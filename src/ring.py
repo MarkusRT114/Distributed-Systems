@@ -78,7 +78,8 @@ class Ring:
         print(f"[RING] Links: {left_id[:8]} | Ich: {self.node.id[:8]} | Rechts: {right_id[:8]}")
         
         # Leader broadcasted State bei Ring-Änderung (verzögert)
-        if self.node.is_leader and hasattr(self.node, 'shopping_list'):
+        # Sendet IMMER wenn Ring sich ändert, egal wer joint
+        if self.node.is_leader and hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
             items = self.node.shopping_list.get_items()
             if items:
                 import threading
@@ -86,9 +87,12 @@ class Ring:
                 
                 def delayed_sync():
                     time.sleep(2)
-                    print(f"[RING] Leader broadcasted aktuellen State ({len(items)} Items)")
+                    print(f"[RING] Leader sendet State-Sync ({len(items)} Items)")
                     for item in items:
-                        self.node._broadcast_update("sync", item)
+                        try:
+                            self.node._broadcast_update("sync", item)
+                        except Exception as e:
+                            print(f"[RING] Sync-Fehler: {e}")
                 
                 threading.Thread(target=delayed_sync, daemon=True).start()
     
