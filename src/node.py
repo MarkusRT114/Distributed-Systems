@@ -106,12 +106,17 @@ class Node:
                     action, item = msg["action"], msg["item"]
                     seq = msg.get("seq", 0)
                     
-                    print(f"[COORD] Update #{seq}: {action} {item}")
-                    
-                    if action == "add" and item not in self.shopping_list.items:
-                        self.shopping_list.items.append(item)
-                    elif action == "remove" and item in self.shopping_list.items:
-                        self.shopping_list.items.remove(item)
+                    if action == "sync":
+                        # Sync-Message ohne Log
+                        if item not in self.shopping_list.items:
+                            self.shopping_list.items.append(item)
+                    else:
+                        print(f"[COORD] Update #{seq}: {action} {item}")
+                        
+                        if action == "add" and item not in self.shopping_list.items:
+                            self.shopping_list.items.append(item)
+                        elif action == "remove" and item in self.shopping_list.items:
+                            self.shopping_list.items.remove(item)
             except:
                 pass
     

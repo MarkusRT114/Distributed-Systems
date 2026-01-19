@@ -76,6 +76,16 @@ class Ring:
         }
         
         print(f"[RING] Links: {left_id[:8]} | Ich: {self.node.id[:8]} | Rechts: {right_id[:8]}")
+        
+        # Leader broadcasted State bei Ring-Änderung
+        if self.node.is_leader and hasattr(self.node, 'shopping_list'):
+            items = self.node.shopping_list.get_items()
+            if items:
+                print(f"[RING] Leader broadcasted aktuellen State ({len(items)} Items)")
+                import time
+                time.sleep(0.5)
+                for item in items:
+                    self.node._broadcast_update("sync", item)
     
     def get_right_neighbor(self):
         return self.right_neighbor
