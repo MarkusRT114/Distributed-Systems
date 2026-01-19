@@ -58,7 +58,7 @@ class Discovery:
         inactive_peers = []
         
         for peer_id, peer_info in self.peers.items():
-            if current_time - peer_info["timestamp"] > 10:
+            if current_time - peer_info["timestamp"] > 30:
                 inactive_peers.append(peer_id)
         
         for peer_id in inactive_peers:
