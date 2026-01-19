@@ -84,6 +84,32 @@ class Election:
         except Exception as e:
             print(f"[ELECTION] Fehler: {e}")
     
+    def _recover_and_sync(self):
+        """State-Recovery und anschließender Sync"""
+        time.sleep(2)
+        
+        # Habe ich eine leere Liste?
+        if not self.node.shopping_list.get_items():
+            print(f"[ELECTION] Neuer Leader hat leere Liste - frage Peers nach State")
+            recovered_items = self.node._request_state_from_peers()
+            
+            if recovered_items:
+                print(f"[ELECTION] State-Recovery erfolgreich: {len(recovered_items)} Items")
+                self.node.shopping_list.items = recovered_items
+            else:
+                print(f"[ELECTION] Keine State-Recovery nötig oder keine Peers mit Daten")
+        
+        # State-Sync senden
+        time.sleep(3)
+        items = self.node.shopping_list.get_items()
+        if items:
+            print(f"[ELECTION] Leader sendet State-Sync ({len(items)} Items)")
+            for item in items:
+                try:
+                    self.node._broadcast_update("sync", item)
+                except Exception as e:
+                    print(f"[ELECTION] Sync-Fehler: {e}")
+    
     def _listen(self):
         while self.running:
             try:
@@ -106,19 +132,8 @@ class Election:
                         self.election_in_progress = False
                         print(f"[ELECTION] Node {self.node.id[:8]} ist LEADER")
                         
-                        def delayed_sync():
-                            time.sleep(5)
-                            if hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
-                                items = self.node.shopping_list.get_items()
-                                if items:
-                                    print(f"[ELECTION] Neuer Leader sendet State-Sync ({len(items)} Items)")
-                                    for item in items:
-                                        try:
-                                            self.node._broadcast_update("sync", item)
-                                        except Exception as e:
-                                            print(f"[ELECTION] Sync-Fehler: {e}")
-                        
-                        threading.Thread(target=delayed_sync, daemon=True).start()
+                        # State-Recovery und Sync
+                        threading.Thread(target=self._recover_and_sync, daemon=True).start()
                         self._send_leader(self.node.id)
                 
                 elif msg["type"] == "leader":
@@ -130,19 +145,8 @@ class Election:
                             self.node.is_leader = True
                             print(f"[ELECTION] Node {self.node.id[:8]} ist LEADER")
                             
-                            def delayed_sync():
-                                time.sleep(5)
-                                if hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
-                                    items = self.node.shopping_list.get_items()
-                                    if items:
-                                        print(f"[ELECTION] Neuer Leader sendet State-Sync ({len(items)} Items)")
-                                        for item in items:
-                                            try:
-                                                self.node._broadcast_update("sync", item)
-                                            except Exception as e:
-                                                print(f"[ELECTION] Sync-Fehler: {e}")
-                            
-                            threading.Thread(target=delayed_sync, daemon=True).start()
+                            # State-Recovery und Sync
+                            threading.Thread(target=self._recover_and_sync, daemon=True).start()
                     else:
                         self.node.is_leader = False
                         self.election_in_progress = False
