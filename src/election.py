@@ -106,9 +106,8 @@ class Election:
                         self.election_in_progress = False
                         print(f"[ELECTION] Node {self.node.id[:8]} ist LEADER")
                         
-                        # Sende State-Sync wenn ich Leader werde
                         def delayed_sync():
-                            time.sleep(2)
+                            time.sleep(5)
                             if hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
                                 items = self.node.shopping_list.get_items()
                                 if items:
@@ -131,9 +130,8 @@ class Election:
                             self.node.is_leader = True
                             print(f"[ELECTION] Node {self.node.id[:8]} ist LEADER")
                             
-                            # Sende State-Sync wenn ich Leader werde
                             def delayed_sync():
-                                time.sleep(2)
+                                time.sleep(5)
                                 if hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
                                     items = self.node.shopping_list.get_items()
                                     if items:
