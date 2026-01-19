@@ -2,6 +2,7 @@ import uuid
 import socket
 import json
 import threading
+import time
 from shopping_list import ShoppingList
 
 class Node:
@@ -86,10 +87,58 @@ class Node:
             except:
                 pass
     
+    def _request_state_from_peers(self):
+        """Fragt Peers nach State wenn Leader mit leerer Liste wird"""
+        peers = self.election.ring.discovery.get_peers()
+        if not peers:
+            return []
+        
+        # Sende Request an alle Peers
+        msg = json.dumps({"type": "state_req"})
+        
+        for peer_id, peer_info in peers.items():
+            try:
+                peer_ip = peer_info.get("ip", "127.0.0.1")
+                self.coord_socket.sendto(msg.encode(), (peer_ip, peer_info["port"] + 2000))
+            except:
+                pass
+        
+        # Warte auf Antworten (max 2 Sekunden)
+        original_timeout = self.coord_socket.gettimeout()
+        self.coord_socket.settimeout(0.5)
+        responses = []
+        
+        try:
+            start_time = time.time()
+            while time.time() - start_time < 2:
+                try:
+                    data, addr = self.coord_socket.recvfrom(1024)
+                    msg = json.loads(data.decode())
+                    
+                    if msg["type"] == "state_res":
+                        items = msg.get("items", [])
+                        if items:
+                            responses.append(items)
+                            print(f"[RECOVERY] State erhalten: {len(items)} Items")
+                except socket.timeout:
+                    continue
+                except:
+                    pass
+        except:
+            pass
+        finally:
+            self.coord_socket.settimeout(original_timeout)
+        
+        # Nimm die längste Liste (am vollständigsten)
+        if responses:
+            return max(responses, key=len)
+        
+        return []
+    
     def _coord_listen(self):
         while self.coord_running:
             try:
-                data, _ = self.coord_socket.recvfrom(1024)
+                data, addr = self.coord_socket.recvfrom(1024)
                 msg = json.loads(data.decode())
                 
                 if msg["type"] == "req" and self.is_leader:
@@ -116,6 +165,19 @@ class Node:
                             self.shopping_list.items.append(item)
                         elif action == "remove" and item in self.shopping_list.items:
                             self.shopping_list.items.remove(item)
+                
+                elif msg["type"] == "state_req":
+                    # Jemand fragt nach State
+                    items = self.shopping_list.get_items()
+                    response = json.dumps({"type": "state_res", "items": items})
+                    
+                    try:
+                        # Sende Antwort zurück
+                        self.coord_socket.sendto(response.encode(), addr)
+                        print(f"[RECOVERY] State gesendet: {len(items)} Items")
+                    except:
+                        pass
+            
             except:
                 pass
     
