@@ -18,7 +18,9 @@ class Discovery:
         
         node.port = self.listen_port
         self.peers = {}
+        
         self.on_peer_removed = None
+        self.on_peer_added = None
         
         self.broadcast_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.broadcast_socket.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
@@ -99,7 +101,9 @@ class Discovery:
                 peer_port = message.get("port", self.broadcast_port)
                 peer_ip = addr[0]
                 
-                if peer_id not in self.peers:
+                is_new_peer = peer_id not in self.peers
+                
+                if is_new_peer:
                     print(f"[DISCOVERY] Neuer Peer: {peer_id[:8]} auf {peer_ip}:{peer_port}")
                 
                 self.peers[peer_id] = {
@@ -107,6 +111,9 @@ class Discovery:
                     "ip": peer_ip,
                     "timestamp": time.time()
                 }
+                
+                if is_new_peer and self.on_peer_added:
+                    self.on_peer_added()
                 
             except Exception as e:
                 if self.running:
@@ -123,7 +130,7 @@ class Discovery:
             while self.running:
                 self.send_announcement()
                 self.cleanup_peers()
-                time.sleep(2)
+                time.sleep(1)
         
         announce_thread = threading.Thread(target=announce_loop)
         announce_thread.daemon = True

@@ -9,6 +9,7 @@ class Ring:
         self.election = None
         
         self.discovery.on_peer_removed = self.handle_peer_removal
+        self.discovery.on_peer_added = self.handle_peer_addition
     
     def set_election(self, election):
         self.election = election
@@ -28,20 +29,39 @@ class Ring:
                     import time
                     time.sleep(2)
                     
-                    # Prüfe ob wir alleine sind
                     peers = self.discovery.get_peers()
                     if not peers:
-                        # Nur noch wir - werden automatisch Leader
                         self.node.is_leader = True
                         self.node.current_leader_id = self.node.id
                         print(f"[ELECTION] Node {self.node.id[:8]} ist alleine - wird Leader")
                         return
                     
-                    # Starte Election
                     if not self.election.election_in_progress:
                         self.election.start_election()
                 
                 threading.Thread(target=delayed_election, daemon=True).start()
+    
+    def handle_peer_addition(self):
+        print(f"[RING] Neuer Peer joint - Ring-Update + State-Sync")
+        self.update_ring()
+        
+        # Leader sendet State nur bei NEUEN Peers
+        if self.node.is_leader and hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
+            items = self.node.shopping_list.get_items()
+            if items:
+                import threading
+                import time
+                
+                def delayed_sync():
+                    time.sleep(2)
+                    print(f"[RING] Leader sendet State-Sync ({len(items)} Items)")
+                    for item in items:
+                        try:
+                            self.node._broadcast_update("sync", item)
+                        except Exception as e:
+                            print(f"[RING] Sync-Fehler: {e}")
+                
+                threading.Thread(target=delayed_sync, daemon=True).start()
     
     def update_ring(self):
         peers = self.discovery.get_peers()
@@ -76,25 +96,6 @@ class Ring:
         }
         
         print(f"[RING] Links: {left_id[:8]} | Ich: {self.node.id[:8]} | Rechts: {right_id[:8]}")
-        
-        # Leader broadcasted State bei Ring-Änderung (verzögert)
-        # Sendet IMMER wenn Ring sich ändert, egal wer joint
-        if self.node.is_leader and hasattr(self.node, 'shopping_list') and hasattr(self.node, 'coord_socket'):
-            items = self.node.shopping_list.get_items()
-            if items:
-                import threading
-                import time
-                
-                def delayed_sync():
-                    time.sleep(2)
-                    print(f"[RING] Leader sendet State-Sync ({len(items)} Items)")
-                    for item in items:
-                        try:
-                            self.node._broadcast_update("sync", item)
-                        except Exception as e:
-                            print(f"[RING] Sync-Fehler: {e}")
-                
-                threading.Thread(target=delayed_sync, daemon=True).start()
     
     def get_right_neighbor(self):
         return self.right_neighbor
